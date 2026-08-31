@@ -142,6 +142,7 @@ h2,
   border-radius: 34px;
   background: var(--blue);
   color: white;
+  text-align: center;
   box-shadow: 0 20px 48px rgb(0 0 0 / 22%);
 }
 
@@ -163,7 +164,7 @@ h2,
 
 .welcome-bubble p {
   max-width: 390px;
-  margin: 18px 0 0;
+  margin: 18px auto 0;
   color: rgb(255 255 255 / 88%);
   font-size: 18px;
   line-height: 1.45;
@@ -285,6 +286,11 @@ h2,
   box-shadow: 0 10px 28px rgb(1 255 118 / 18%);
 }
 
+.start-button > span:not(.login-spinner) {
+  width: 100%;
+  text-align: center;
+}
+
 .start-button::after {
   position: absolute;
   top: -20px;
@@ -296,6 +302,8 @@ h2,
 }
 
 .start-button b {
+  position: absolute;
+  right: 20px;
   font-size: 26px;
   font-weight: 900;
   line-height: 1;
@@ -307,6 +315,10 @@ h2,
   background: #d8eadf;
   box-shadow: none;
   cursor: wait;
+}
+
+.start-button--loading > span:not(.login-spinner) {
+  width: auto;
 }
 
 .login-spinner {
@@ -354,8 +366,18 @@ h2,
   position: absolute;
   display: block;
   opacity: 0.82;
-  pointer-events: none;
+  z-index: 1;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
   will-change: transform;
+}
+
+.decorative-bubble--dragging {
+  z-index: 3;
+  cursor: grabbing;
+  opacity: 0.95;
 }
 
 .decorative-bubble--one {

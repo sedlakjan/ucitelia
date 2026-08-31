@@ -25,6 +25,8 @@
   var timer = null;
   var loginTimer = null;
   var audioContext = null;
+  var bubbleAnimationFrame = null;
+  var bubbleMotions = [];
   var suppressSheetAnimation = false;
   var state = freshState();
 
@@ -254,7 +256,7 @@
       loggingIn ? '<span class="login-spinner" aria-hidden="true"><i></i><i></i><i></i></span><span>Prihlasujem do EDU Page…</span>' : '<span>Prihlásiť sa do EDU Page</span><b>→</b>',
       '</button>',
       '<p class="start-note">Pracovný list maj pred sebou. Po prihlásení sa spustí 8-minútový čas.</p></section>',
-      '<img class="decorative-bubble decorative-bubble--one" src="assets/brand/bubble-star.svg" alt=""><img class="decorative-bubble decorative-bubble--two" src="assets/brand/bubble-round.svg" alt=""><img class="decorative-bubble decorative-bubble--three" src="assets/brand/bubble-speech.svg" alt=""></main>'
+      '<img class="decorative-bubble decorative-bubble--one" src="assets/brand/bubble-star.svg" alt="" draggable="false"><img class="decorative-bubble decorative-bubble--two" src="assets/brand/bubble-round.svg" alt="" draggable="false"><img class="decorative-bubble decorative-bubble--three" src="assets/brand/bubble-speech.svg" alt="" draggable="false"></main>'
     ].join("");
   }
 
@@ -330,7 +332,7 @@
     var read = state.read.has(item.id);
     var done = state.resolved.has(item.id);
     var stateClass = done ? "notification-state--done" : !read ? "notification-state--unread" : "notification-state--chevron";
-    var stateIcon = done ? "✓" : !read ? "•" : "";
+    var stateIcon = done ? "✓" : "";
     return [
       '<button class="notification-row ', !read ? "notification-row--unread" : "", '" data-open="', item.id, '">', glyph(task),
       '<span class="notification-copy"><span class="notification-meta">', task.sender, task.important ? "<em>DÔLEŽITÉ</em>" : "", '</span><strong>', task.title, '</strong><small>', done ? "Vybavené" : task.summary, '</small></span>',
@@ -413,6 +415,219 @@
 
   function render() {
     root.innerHTML = state.phase === "intro" || state.phase === "login" ? renderIntro() : state.phase === "done" ? renderDone() : state.phase === "farewell" ? renderFarewell() : renderActive();
+    setupInteractiveBubbles();
+  }
+
+  function setupInteractiveBubbles() {
+    if (bubbleAnimationFrame !== null) cancelAnimationFrame(bubbleAnimationFrame);
+    bubbleAnimationFrame = null;
+    bubbleMotions = [];
+
+    var shell = root.querySelector(".intro-shell");
+    if (!shell) return;
+
+    root.querySelectorAll(".decorative-bubble").forEach(function (bubble) {
+      var motion = {
+        element: bubble,
+        baseLeft: 0,
+        baseTop: 0,
+        width: 0,
+        height: 0,
+        x: 0,
+        y: 0,
+        velocityX: 0,
+        velocityY: 0,
+        lastX: 0,
+        lastY: 0,
+        lastTime: 0,
+        samples: [],
+        dragging: false,
+        active: false
+      };
+      bubbleMotions.push(motion);
+
+      bubble.addEventListener("pointerdown", function (event) {
+        if (state.phase !== "intro" && state.phase !== "login") return;
+        event.preventDefault();
+        activateBubbleWorld(shell);
+        motion.dragging = true;
+        motion.velocityX = 0;
+        motion.velocityY = 0;
+        motion.lastX = event.clientX;
+        motion.lastY = event.clientY;
+        motion.lastTime = performance.now();
+        motion.samples = [{ x: event.clientX, y: event.clientY, time: motion.lastTime }];
+        bubble.classList.add("decorative-bubble--dragging");
+        bubble.setPointerCapture(event.pointerId);
+      });
+
+      bubble.addEventListener("pointermove", function (event) {
+        if (!motion.dragging) return;
+        if (event.buttons === 0) return releaseBubble(event);
+        event.preventDefault();
+        var now = performance.now();
+        var elapsed = Math.max(8, now - motion.lastTime);
+        var deltaX = event.clientX - motion.lastX;
+        var deltaY = event.clientY - motion.lastY;
+        motion.x += deltaX;
+        motion.y += deltaY;
+        clampBubble(motion, shell);
+        motion.velocityX = deltaX / elapsed;
+        motion.velocityY = deltaY / elapsed;
+        motion.lastX = event.clientX;
+        motion.lastY = event.clientY;
+        motion.lastTime = now;
+        motion.samples.push({ x: event.clientX, y: event.clientY, time: now });
+        motion.samples = motion.samples.filter(function (sample) { return now - sample.time <= 140; });
+        positionBubble(motion);
+      });
+
+      function releaseBubble(event) {
+        if (!motion.dragging) return;
+        motion.dragging = false;
+        if (motion.samples.length > 1) {
+          var firstSample = motion.samples[0];
+          var lastSample = motion.samples[motion.samples.length - 1];
+          var sampleTime = Math.max(8, lastSample.time - firstSample.time);
+          motion.velocityX = (lastSample.x - firstSample.x) / sampleTime;
+          motion.velocityY = (lastSample.y - firstSample.y) / sampleTime;
+        }
+        bubble.classList.remove("decorative-bubble--dragging");
+        if (bubble.hasPointerCapture(event.pointerId)) bubble.releasePointerCapture(event.pointerId);
+        startBubbleMotion(shell);
+      }
+
+      bubble.addEventListener("pointerup", releaseBubble);
+      bubble.addEventListener("pointercancel", releaseBubble);
+      bubble.addEventListener("lostpointercapture", releaseBubble);
+    });
+  }
+
+  function positionBubble(motion) {
+    motion.element.style.translate = motion.x.toFixed(2) + "px " + motion.y.toFixed(2) + "px";
+  }
+
+  function activateBubbleWorld(shell) {
+    var shellRect = shell.getBoundingClientRect();
+    bubbleMotions.forEach(function (motion) {
+      if (motion.active) return;
+      var bubbleRect = motion.element.getBoundingClientRect();
+      motion.baseLeft = bubbleRect.left - shellRect.left;
+      motion.baseTop = bubbleRect.top - shellRect.top;
+      motion.width = bubbleRect.width;
+      motion.height = bubbleRect.height;
+      motion.x = 0;
+      motion.y = 0;
+      motion.active = true;
+      motion.element.style.animationPlayState = "paused";
+    });
+  }
+
+  function clampBubble(motion, shell) {
+    var minimumX = -motion.baseLeft;
+    var minimumY = -motion.baseTop;
+    var maximumX = shell.clientWidth - motion.baseLeft - motion.width;
+    var maximumY = shell.clientHeight - motion.baseTop - motion.height;
+    motion.x = Math.min(maximumX, Math.max(minimumX, motion.x));
+    motion.y = Math.min(maximumY, Math.max(minimumY, motion.y));
+  }
+
+  function resolveBubbleCollisions(shell) {
+    for (var firstIndex = 0; firstIndex < bubbleMotions.length; firstIndex += 1) {
+      var first = bubbleMotions[firstIndex];
+      if (!first.active) continue;
+      for (var secondIndex = firstIndex + 1; secondIndex < bubbleMotions.length; secondIndex += 1) {
+        var second = bubbleMotions[secondIndex];
+        if (!second.active) continue;
+
+        var firstRadius = Math.min(first.width, first.height) * 0.42;
+        var secondRadius = Math.min(second.width, second.height) * 0.42;
+        var firstCenterX = first.baseLeft + first.x + first.width / 2;
+        var firstCenterY = first.baseTop + first.y + first.height / 2;
+        var secondCenterX = second.baseLeft + second.x + second.width / 2;
+        var secondCenterY = second.baseTop + second.y + second.height / 2;
+        var differenceX = secondCenterX - firstCenterX;
+        var differenceY = secondCenterY - firstCenterY;
+        var distance = Math.hypot(differenceX, differenceY);
+        var minimumDistance = firstRadius + secondRadius;
+        if (distance >= minimumDistance) continue;
+
+        if (distance < 0.001) {
+          differenceX = 1;
+          differenceY = 0;
+          distance = 1;
+        }
+        var normalX = differenceX / distance;
+        var normalY = differenceY / distance;
+        var inverseMassFirst = first.dragging ? 0 : 1 / (firstRadius * firstRadius);
+        var inverseMassSecond = second.dragging ? 0 : 1 / (secondRadius * secondRadius);
+        var inverseMassTotal = inverseMassFirst + inverseMassSecond;
+        if (!inverseMassTotal) continue;
+
+        var overlap = minimumDistance - distance;
+        first.x -= normalX * overlap * inverseMassFirst / inverseMassTotal;
+        first.y -= normalY * overlap * inverseMassFirst / inverseMassTotal;
+        second.x += normalX * overlap * inverseMassSecond / inverseMassTotal;
+        second.y += normalY * overlap * inverseMassSecond / inverseMassTotal;
+
+        var relativeSpeed = (second.velocityX - first.velocityX) * normalX + (second.velocityY - first.velocityY) * normalY;
+        if (relativeSpeed < 0) {
+          var impulse = -(1 + 0.88) * relativeSpeed / inverseMassTotal;
+          first.velocityX -= impulse * inverseMassFirst * normalX;
+          first.velocityY -= impulse * inverseMassFirst * normalY;
+          second.velocityX += impulse * inverseMassSecond * normalX;
+          second.velocityY += impulse * inverseMassSecond * normalY;
+        }
+
+        clampBubble(first, shell);
+        clampBubble(second, shell);
+      }
+    }
+  }
+
+  function startBubbleMotion(shell) {
+    if (bubbleAnimationFrame !== null) return;
+    var previousTime = performance.now();
+
+    function animate(now) {
+      if (!shell.isConnected) {
+        bubbleAnimationFrame = null;
+        return;
+      }
+      var elapsed = Math.min(34, Math.max(8, now - previousTime));
+      previousTime = now;
+      var moving = false;
+
+      bubbleMotions.forEach(function (motion) {
+        if (!motion.active || motion.dragging) return;
+        var oldX = motion.x;
+        var oldY = motion.y;
+        motion.x += motion.velocityX * elapsed;
+        motion.y += motion.velocityY * elapsed;
+        clampBubble(motion, shell);
+        if (motion.x !== oldX + motion.velocityX * elapsed) motion.velocityX *= -0.76;
+        if (motion.y !== oldY + motion.velocityY * elapsed) motion.velocityY *= -0.76;
+        var friction = Math.pow(0.985, elapsed / 16.67);
+        motion.velocityX *= friction;
+        motion.velocityY *= friction;
+        if (Math.abs(motion.velocityX) < 0.002) motion.velocityX = 0;
+        if (Math.abs(motion.velocityY) < 0.002) motion.velocityY = 0;
+      });
+
+      resolveBubbleCollisions(shell);
+      resolveBubbleCollisions(shell);
+      bubbleMotions.forEach(function (motion) {
+        if (!motion.active) return;
+        clampBubble(motion, shell);
+        positionBubble(motion);
+        if (motion.dragging || motion.velocityX || motion.velocityY) moving = true;
+      });
+
+      if (moving) bubbleAnimationFrame = requestAnimationFrame(animate);
+      else bubbleAnimationFrame = null;
+    }
+
+    bubbleAnimationFrame = requestAnimationFrame(animate);
   }
 
   function renderSteady() {
