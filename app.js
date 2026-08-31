@@ -12,8 +12,8 @@
     colleague: { title: "Dozor na chodbe", sender: "Katarína · kolegyňa", summary: "Potrebujem si na päť minút odbehnúť.", icon: "K", tone: "green" },
     student: { title: "Zabudnutý projekt", sender: "Samuel · 2.B", summary: "Môžem ho priniesť zajtra?", icon: "S", tone: "blue" }
   };
-  var STUDENTS = ["Kováčová", "Molnár", "Varga", "Horváthová", "Baláž", "Nagy", "Lukáčová", "Szabó", "Tóthová", "Hudáková", "Novák", "Slováková", "Polák", "Sedlák", "Urbanová", "Rusnáková", "Bednár", "Lechner", "Mikulová", "Gašparová"];
-  var ABSENT = ["Kováčová", "Molnár", "Varga", "Horváthová", "Baláž"];
+  var STUDENTS = ["Baláž", "Bednár", "Gašparová", "Horváthová", "Hudáková", "Kováčová", "Lechner", "Lukáčová", "Mikulová", "Molnár", "Nagy", "Novák", "Polák", "Rusnáková", "Sedlák", "Slováková", "Szabó", "Tóthová", "Urbanová", "Varga J.", "Varga M."];
+  var ABSENT = ["Baláž", "Horváthová", "Kováčová", "Molnár", "Varga M."];
   var MEETING_BRIEFS = [
     "Tlačiareň má toner už len na dva dni a v sklade ostal jeden balík papiera.",
     "V chemickom laboratóriu je šesť ochranných okuliarov poškodených.",
@@ -118,7 +118,7 @@
   function beginSimulation() {
     state.phase = "active";
     state.plan = shuffled(Object.keys(TASKS)).map(function (id, index) { return { id: id, at: ARRIVAL_SLOTS[index] }; });
-    state.studentOrder = shuffled(STUDENTS);
+    state.studentOrder = STUDENTS.slice();
     state.meetingBrief = pickMeetingBrief();
     state.startedAt = Date.now();
     render();
@@ -361,7 +361,7 @@
 
   function renderTask(id) {
     if (id === "attendance") {
-      return heading(TASKS.attendance) + '<div class="instruction-bubble instruction-bubble--blue">Dnes chýbajú: Kováčová, Molnár, Varga, Horváthová a Baláž.</div><p class="sheet-instruction">Označ presne päť mien a potvrď dochádzku.</p><div class="student-grid">' +
+      return heading(TASKS.attendance) + '<div class="instruction-bubble instruction-bubble--blue">Dnes chýbajú: Baláž, Horváthová, Kováčová, Molnár a Varga M.</div><p class="sheet-instruction">Označ presne päť mien a potvrď dochádzku.</p><div class="student-grid">' +
         state.studentOrder.map(function (name) {
           var selected = state.selectedStudents.indexOf(name) >= 0;
           return '<label class="student-option ' + (selected ? "student-option--selected" : "") + '"><input type="checkbox" data-student="' + esc(name) + '"' + (selected ? " checked" : "") + '><span>' + name + "</span></label>";
@@ -380,7 +380,7 @@
       var replyField = state.substitutionDecision ?
         '<label class="field-label" for="substitution-reply">' + (acceptsSubstitution ? "Správa rodičovi" : "Správa zástupkyni") + '</label><textarea id="substitution-reply" rows="4" placeholder="' + (acceptsSubstitution ? "Dobrý deň, pre nečakané zastupovanie potrebujem našu dnešnú konzultáciu presunúť. Mohli by sme sa stretnúť…" : "Ahoj, zastupovanie, žiaľ, nemôžem prevziať, pretože mám v tom čase dohodnutú konzultáciu s rodičom…") + '">' + esc(state.substitutionAnswer) + '</textarea><p class="field-help">' + (acceptsSubstitution ? "Vysvetli situáciu a navrhni rodičovi konkrétny náhradný termín." : "Odmietni jasne a uveď, že máš dohodnutú konzultáciu s rodičom.") + '</p>' :
         '<p class="decision-hint">Najskôr si vyber, či zastupovanie prijmeš.</p>';
-      return heading(TASKS.substitution) + '<div class="instruction-bubble instruction-bubble--sand">Kolegyňa ochorela. Potrebujeme zastúpiť fyziku v 4.A na celú 6. hodinu.</div><p class="sheet-instruction">V tom čase máš dohodnutú konzultáciu s rodičom. Zastupovanie môžeš prijať a konzultáciu presunúť, alebo ho odmietnuť. Najskôr sa rozhodni.</p><div class="choice-stack substitution-choices"><button class="choice ' + (state.substitutionDecision === "accept" ? "choice--selected" : "") + '" data-substitution-decision="accept">Zoberiem zastupovanie</button><button class="choice ' + (state.substitutionDecision === "decline" ? "choice--selected" : "") + '" data-substitution-decision="decline">Nezoberiem zastupovanie</button></div>' + replyField + error(state.substitutionError) + '<button class="action-button" data-action="substitution"' + (state.substitutionDecision ? "" : " disabled") + '>Odoslať odpoveď</button>';
+      return heading(TASKS.substitution) + '<div class="instruction-bubble instruction-bubble--sand">Kolegyňa ochorela. Potrebujeme zastúpiť fyziku v 4.A na 6. hodinu.</div><p class="sheet-instruction">V tom čase máš dohodnutú konzultáciu s rodičom. Zastupovanie môžeš prijať a konzultáciu presunúť, alebo ho odmietnuť. Najskôr sa rozhodni.</p><div class="choice-stack substitution-choices"><button class="choice ' + (state.substitutionDecision === "accept" ? "choice--selected" : "") + '" data-substitution-decision="accept">Zoberiem zastupovanie</button><button class="choice ' + (state.substitutionDecision === "decline" ? "choice--selected" : "") + '" data-substitution-decision="decline">Nezoberiem zastupovanie</button></div>' + replyField + error(state.substitutionError) + '<button class="action-button" data-action="substitution"' + (state.substitutionDecision ? "" : " disabled") + '>Odoslať odpoveď</button>';
     }
     if (id === "colleague") {
       return heading(TASKS.colleague) + '<div class="chat-thread"><div class="chat-bubble">Ahoj, potrebujem si počas veľkej prestávky na päť minút odbehnúť. Postrážiš aj moju časť chodby? Vďaka!</div></div><div class="quick-replies"><button data-resolve="colleague">Áno, postrážim.</button><button data-resolve="colleague">Dnes to nestíham.</button></div>';
